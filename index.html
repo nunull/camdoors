@@ -1,0 +1,224 @@
+<DOCTYPE html>
+<html>
+	<head>
+		<title>camdoors</title>
+		<link rel="stylesheet" type="text/css" href="css/main.css">
+	</head>
+	<body>
+		<div id="overlay" class="active">
+			<svg version="1.1" id="Ebene_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" width="64px" height="64px" viewBox="0 0 64 64" enable-background="new 0 0 64 64" xml:space="preserve">
+				<g fill="#FFFFFF">
+					<path d="M30,2c0,1.104,0.896,2,2,2c7.479,0,14.51,2.913,19.798,8.202C57.087,17.49,60,24.521,60,32c0,7.381-2.842,14.323-8,19.587
+						V46c0-1.104-0.896-2-2-2s-2,0.896-2,2v12h12c1.104,0,2-0.896,2-2s-0.896-2-2-2h-4.776C60.885,48.032,64,40.257,64,32
+						c0-8.547-3.329-16.583-9.374-22.627C48.583,3.329,40.547,0,32,0C30.896,0,30,0.896,30,2z"/>
+					<path d="M9.374,54.627C15.417,60.671,23.453,64,32,64c1.104,0,2-0.896,2-2s-0.896-2-2-2c-7.479,0-14.51-2.913-19.798-8.202
+						C6.913,46.51,4,39.479,4,32c0-7.381,2.842-14.323,8-19.587V18c0,1.104,0.896,2,2,2s2-0.896,2-2V6H4C2.896,6,2,6.896,2,8
+						s0.896,2,2,2h4.776C3.115,15.968,0,23.743,0,32C0,40.547,3.329,48.583,9.374,54.627z"/>
+				</g>
+			</svg>
+		</div>
+		<video id="remote-video" muted="true" autoplay></video>
+		<video id="own-video" muted="true" autoplay></video>
+		<canvas id="tmp" style="display: none;"></canvas>
+		<div id="counter-container">
+			<span id="counter"></span>
+		</div>
+
+		<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js"></script>
+		<script type="text/javascript" src="http://cdn.peerjs.com/0.3/peer.js"></script>
+		<script>
+			var config = {
+				screenTimeout: 30,
+				screenBlockingTimeout: 30,
+				motionTolerance: 50,
+				motionTreshhold: 100
+			};
+
+			var prefix = 'camdoors',
+				ownIndex = document.location.search.split('?')[1].split('/')[0],
+				postfix = ownIndex.substring(1);
+
+			ownIndex = ownIndex.substring(0, 1);
+
+			var ownId = prefix + ownIndex + postfix,
+				remoteIndex = '1';
+
+			if(ownIndex === '1') {
+				remoteIndex = '2';
+			}
+
+			var remoteId = prefix + remoteIndex + postfix;
+
+			navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+
+			var peer = new Peer(ownId, {
+				key: 'lwjd5qra8257b9'
+			});
+
+			peer.on('open', function(){
+				console.log('ownId: ' + peer.id);
+			});
+
+			peer.on('call', function(call){
+				call.answer(window.localStream);
+				receiveVideoCall(call);
+			});
+			peer.on('error', function(err){
+				console.log('error: ' + err.message);
+			});
+
+			function initVideoStream () {
+			  	navigator.getUserMedia({
+			  		video: true
+			  	}, function(stream) {
+					$('#own-video').prop('src', URL.createObjectURL(stream));
+					trackMotion();
+
+					window.localStream = stream;
+				}, function() {
+
+				});
+			}
+
+			function receiveVideoCall(call) {
+				if (window.existingCall) {
+					window.existingCall.close();
+				}
+
+				call.on('stream', function(stream) {
+					$('#remote-video').prop('src', URL.createObjectURL(stream));
+				});
+
+				window.existingCall = call;
+				
+				console.log('Connected. remoteId: ' + call.peer);
+			}
+
+			var ownVideo = null,
+				oldImage = [],
+				sizeSet = false,
+				tolerance = config.motionTolerance,
+				treshhold = config.motionTreshhold;
+			function trackMotion() {
+				var tmpCanvas = document.getElementById('tmp').getContext('2d'),
+					width = $('#own-video').width(),
+					height = $('#own-video').height();
+
+				if(!sizeSet) {
+					ownVideo = $('#own-video')[0];
+					$('#tmp').width(width);
+					$('#tmp').height(height);
+
+					sizeSet = true;
+				}
+
+				tmpCanvas.drawImage(ownVideo, 
+					0, 0, 
+					width, height);
+
+				try {
+					var image = tmpCanvas.getImageData(0, 0, width, height).data;
+
+					if(image.length == oldImage.length) {
+						var changed = 0;
+
+						for(var i = 0, j = oldImage.length; i < j; i++) {
+							var old = oldImage[i],
+								cur = image[i];
+
+							if(cur > old + tolerance || cur < old - tolerance) {
+								changed++;
+							}
+						}
+
+						if(changed > treshhold) {
+							timer.turnScreenOn();
+						}
+					} else {
+						// turnScreenOn();
+					}
+
+					oldImage = image;
+				} catch(error) {
+					console.log(error);
+				}
+
+				setTimeout(trackMotion, (1000/60)*10);
+			}
+
+			function callRemote(remoteId) {
+				console.log('Calling remote. remoteId: ' + remoteId);
+
+				var call = peer.call(remoteId, window.localStream);
+
+				if(call) {
+					receiveVideoCall(call);
+				} else {
+					console.log('Error.');
+
+					setTimeout(function() {
+						callRemote(remoteId);
+					}, 500);
+				}
+			}
+
+			var timer = (function(config) {
+				var screenTimeoutFunc = null,
+					screenTimeout = config.screenTimeout,
+					screenBlockingTimeout = config.screenBlockingTimeout,
+					screenBlockingTimeoutFunc = null,
+					screenOn = false,
+					screenBlocked = false,
+					counterValue = 0,
+					counterInterval = null;
+				function turnScreenOn() {
+					if(!screenOn && !screenBlocked) {
+						console.log('Screen: On');
+
+						screenOn = true;
+
+						$('#overlay').removeClass('active');
+
+						clearTimeout(screenTimeoutFunc);
+						screenTimeoutFunc = setTimeout(turnScreenOff, screenTimeout * 1000);
+
+						counterValue = screenTimeout;
+						$('#counter').html(counterValue--);
+						counterInterval = setInterval(function() {
+							$('#counter').html(counterValue--);
+						}, 1000);
+					}
+				}
+				function turnScreenOff() {
+					if(screenOn && !screenBlocked) {
+						console.log('Screen: Off');
+
+						screenOn = false;
+						screenBlocked = true;
+
+						$('#overlay').addClass('active');
+
+						screenBlockingTimeoutFunc = setTimeout(function() {
+							screenBlocked = false;
+						}, screenBlockingTimeout * 1000);
+
+						clearInterval(counterInterval);
+					}
+				}
+				return {
+					turnScreenOn: function(){},
+					turnScreenOff: function(){}
+				};
+			})(config);
+
+			// Init
+			initVideoStream();
+			callRemote(remoteId);
+
+			$(window).on('unload', function() {
+				console.log('Disconnect.');
+				peer.disconnect();
+			});
+		</script>
+	</body>
+</html>
