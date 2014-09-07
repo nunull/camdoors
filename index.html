@@ -17,7 +17,7 @@
 				</g>
 			</svg>
 		</div>
-		<video id="remote-video" muted="true" autoplay></video>
+		<video id="remote-video" autoplay></video>
 		<video id="own-video" muted="true" autoplay></video>
 		<canvas id="tmp" style="display: none;"></canvas>
 		<div id="counter-container">
@@ -69,7 +69,8 @@
 
 			function initVideoStream () {
 			  	navigator.getUserMedia({
-			  		video: true
+			  		video: true,
+			  		audio: true
 			  	}, function(stream) {
 					$('#own-video').prop('src', URL.createObjectURL(stream));
 					trackMotion();
