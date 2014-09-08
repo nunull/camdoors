@@ -73,7 +73,6 @@
 			  		audio: true
 			  	}, function(stream) {
 					$('#own-video').prop('src', URL.createObjectURL(stream));
-					trackMotion();
 
 					window.localStream = stream;
 				}, function() {
@@ -87,6 +86,10 @@
 				}
 
 				call.on('stream', function(stream) {
+					stream.addEventListener('error', function(e) {
+						init();
+					});
+
 					$('#remote-video').prop('src', URL.createObjectURL(stream));
 				});
 
@@ -100,52 +103,6 @@
 				sizeSet = false,
 				tolerance = config.motionTolerance,
 				treshhold = config.motionTreshhold;
-			function trackMotion() {
-				var tmpCanvas = document.getElementById('tmp').getContext('2d'),
-					width = $('#own-video').width(),
-					height = $('#own-video').height();
-
-				if(!sizeSet) {
-					ownVideo = $('#own-video')[0];
-					$('#tmp').width(width);
-					$('#tmp').height(height);
-
-					sizeSet = true;
-				}
-
-				tmpCanvas.drawImage(ownVideo, 
-					0, 0, 
-					width, height);
-
-				try {
-					var image = tmpCanvas.getImageData(0, 0, width, height).data;
-
-					if(image.length == oldImage.length) {
-						var changed = 0;
-
-						for(var i = 0, j = oldImage.length; i < j; i++) {
-							var old = oldImage[i],
-								cur = image[i];
-
-							if(cur > old + tolerance || cur < old - tolerance) {
-								changed++;
-							}
-						}
-
-						if(changed > treshhold) {
-							timer.turnScreenOn();
-						}
-					} else {
-						// turnScreenOn();
-					}
-
-					oldImage = image;
-				} catch(error) {
-					console.log(error);
-				}
-
-				setTimeout(trackMotion, (1000/60)*10);
-			}
 
 			function callRemote(remoteId) {
 				console.log('Calling remote. remoteId: ' + remoteId);
@@ -163,58 +120,13 @@
 				}
 			}
 
-			var timer = (function(config) {
-				var screenTimeoutFunc = null,
-					screenTimeout = config.screenTimeout,
-					screenBlockingTimeout = config.screenBlockingTimeout,
-					screenBlockingTimeoutFunc = null,
-					screenOn = false,
-					screenBlocked = false,
-					counterValue = 0,
-					counterInterval = null;
-				function turnScreenOn() {
-					if(!screenOn && !screenBlocked) {
-						console.log('Screen: On');
-
-						screenOn = true;
-
-						$('#overlay').removeClass('active');
-
-						clearTimeout(screenTimeoutFunc);
-						screenTimeoutFunc = setTimeout(turnScreenOff, screenTimeout * 1000);
-
-						counterValue = screenTimeout;
-						$('#counter').html(counterValue--);
-						counterInterval = setInterval(function() {
-							$('#counter').html(counterValue--);
-						}, 1000);
-					}
-				}
-				function turnScreenOff() {
-					if(screenOn && !screenBlocked) {
-						console.log('Screen: Off');
-
-						screenOn = false;
-						screenBlocked = true;
-
-						$('#overlay').addClass('active');
-
-						screenBlockingTimeoutFunc = setTimeout(function() {
-							screenBlocked = false;
-						}, screenBlockingTimeout * 1000);
-
-						clearInterval(counterInterval);
-					}
-				}
-				return {
-					turnScreenOn: function(){},
-					turnScreenOff: function(){}
-				};
-			})(config);
-
 			// Init
-			initVideoStream();
-			callRemote(remoteId);
+			function init() {
+				initVideoStream();
+				callRemote(remoteId);
+			}
+
+			init();
 
 			$(window).on('unload', function() {
 				console.log('Disconnect.');
