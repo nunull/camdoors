@@ -15,9 +15,11 @@
 		git clone https://github.com/nunull/camdoors.git camdoors
 	}
 
-	cdserve() {
-		/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --use-fake-ui-for-media-stream &&
+	cdchrome() {
+		/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --use-fake-ui-for-media-stream &
+	}
 
+	cdserve() {
 		if [ -d ~/Desktop/camdoors ]
 		then
 			echo "Changing into \"~/Desktop/camdoors\""
